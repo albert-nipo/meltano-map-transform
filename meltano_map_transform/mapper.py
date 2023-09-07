@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Generator
-
+import os
+import json
 import singer_sdk.typing as th
 from singer_sdk import _singerlib as singer
 from singer_sdk.helpers._util import utc_now
@@ -12,6 +13,13 @@ from singer_sdk.mapper_base import InlineMapper
 if TYPE_CHECKING:
     from pathlib import PurePath
 
+def replace_item(obj, key, replace_value):
+    for k, v in obj.items():
+        if isinstance(v, dict):
+            obj[k] = replace_item(v, key, replace_value)
+    if key in obj:
+        obj[key] = replace_value
+    return obj
 
 class StreamTransform(InlineMapper):
     """A map transformer which implements the Stream Maps capability."""
@@ -46,7 +54,7 @@ class StreamTransform(InlineMapper):
             description="Stream maps",
         ),
     ).to_dict()
-
+    
     def __init__(
         self,
         *,
@@ -70,7 +78,18 @@ class StreamTransform(InlineMapper):
             validate_config=validate_config,
         )
 
-        self.mapper = PluginMapper(plugin_config=dict(self.config), logger=self.logger)
+        if os.environ.get('I_UUID') is not None:
+            i_uuid = os.environ['I_UUID']
+        else:
+            i_uuid = None
+
+        self.logger.info(i_uuid)
+        
+        config = replace_item(dict(self.config),'i_uuid',"str('"+i_uuid+"')")
+
+        self.logger.info(dict(self.config))
+
+        self.mapper = PluginMapper(plugin_config=self.config, logger=self.logger)
 
     def map_schema_message(
         self,
